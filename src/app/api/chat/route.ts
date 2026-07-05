@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, KBItem } from "@/lib/firestore";
+import { getSession } from "@/lib/auth";
+import { randomUUID } from "crypto";
+
+async function saveMessages(userId: string, userText: string, botText: string, source: string) {
+  const now = new Date().toISOString();
+  const col = db.collection("chatHistory").doc(userId).collection("messages");
+  await Promise.all([
+    col.doc(randomUUID()).set({ role: "user", text: userText, timestamp: now }),
+    col.doc(randomUUID()).set({ role: "bot", text: botText, source, timestamp: now }),
+  ]);
+}
 
 export async function POST(req: NextRequest) {
   const { question } = await req.json() as { question: string };
@@ -22,8 +33,13 @@ export async function POST(req: NextRequest) {
     )
     .sort((a, b) => b.votes_up - a.votes_up);
 
+  const session = await getSession();
+  const userId = session?.sub ?? "anonymous";
+
   if (matched.length > 0) {
-    return NextResponse.json({ answer: matched[0].answer, source: "kb", item: matched[0] });
+    const answer = matched[0].answer;
+    await saveMessages(userId, question, answer, "kb");
+    return NextResponse.json({ answer, source: "kb", item: matched[0] });
   }
 
   // 2. n8n (GPT-4o-mini) にフォールバック
@@ -41,13 +57,15 @@ export async function POST(req: NextRequest) {
       if (res.ok) {
         const data = await res.json();
         const answer = data.answer ?? data.text ?? data.response ?? data.message ?? null;
-        if (answer) return NextResponse.json({ answer, source: "n8n" });
+        if (answer) {
+          await saveMessages(userId, question, answer, "n8n");
+          return NextResponse.json({ answer, source: "n8n" });
+        }
       }
     } catch { /* タイムアウト */ }
   }
 
-  return NextResponse.json({
-    answer: "申し訳ありません、その質問への回答が見つかりませんでした。SEに直接お問い合わせください。",
-    source: "none",
-  });
+  const answer = "申し訳ありません、その質問への回答が見つかりませんでした。SEに直接お問い合わせください。";
+  await saveMessages(userId, question, answer, "none");
+  return NextResponse.json({ answer, source: "none" });
 }

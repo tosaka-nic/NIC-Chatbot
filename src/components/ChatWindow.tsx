@@ -2,6 +2,11 @@
 import { useState, useRef, useEffect } from "react";
 import MessageBubble, { Message } from "./MessageBubble";
 
+const GREETING: Message = {
+  role: "bot",
+  text: "こんにちは！ITサポートBotです。\nPC・ネットワーク・アプリのお困りごとをお気軽にどうぞ。",
+};
+
 function TypingIndicator() {
   return (
     <div className="flex justify-start mb-3">
@@ -18,16 +23,49 @@ function TypingIndicator() {
   );
 }
 
+function DateSeparator({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2 my-3">
+      <div className="flex-1 h-px bg-gray-200" />
+      <span className="text-xs text-gray-400">{label}</span>
+      <div className="flex-1 h-px bg-gray-200" />
+    </div>
+  );
+}
+
+function groupByDate(messages: (Message & { timestamp?: string })[]) {
+  const groups: { date: string; messages: Message[] }[] = [];
+  for (const msg of messages) {
+    const date = msg.timestamp ? new Date(msg.timestamp).toLocaleDateString("ja-JP") : "";
+    const last = groups[groups.length - 1];
+    if (!last || last.date !== date) {
+      groups.push({ date, messages: [msg] });
+    } else {
+      last.messages.push(msg);
+    }
+  }
+  return groups;
+}
+
 export default function ChatWindow() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "bot",
-      text: "こんにちは！ITサポートBotです。\nPC・ネットワーク・アプリのお困りごとをお気軽にどうぞ。",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([GREETING]);
+  const [historyGroups, setHistoryGroups] = useState<{ date: string; messages: Message[] }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/chat/history")
+      .then(r => r.json())
+      .then((data: (Message & { timestamp?: string })[]) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setHistoryGroups(groupByDate(data));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -65,7 +103,20 @@ export default function ChatWindow() {
     <>
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="max-w-2xl mx-auto">
-          {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
+          <MessageBubble msg={GREETING} />
+          {!historyLoading && historyGroups.length > 0 && (
+            <>
+              <DateSeparator label="── 過去7日間の履歴 ──" />
+              {historyGroups.map(group => (
+                <div key={group.date}>
+                  <DateSeparator label={group.date} />
+                  {group.messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
+                </div>
+              ))}
+              <DateSeparator label="── 現在 ──" />
+            </>
+          )}
+          {messages.slice(1).map((msg, i) => <MessageBubble key={i} msg={msg} />)}
           {loading && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>
