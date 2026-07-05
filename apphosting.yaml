@@ -1,0 +1,22 @@
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  minInstances: 0
+  maxInstances: 3
+  concurrency: 80
+
+env:
+  - variable: ADMIN_EMAIL
+    secret: ADMIN_EMAIL
+  - variable: ADMIN_PASSWORD
+    secret: ADMIN_PASSWORD
+  - variable: ADMIN_NAME
+    secret: ADMIN_NAME
+  - variable: JWT_SECRET
+    secret: JWT_SECRET
+  - variable: FIREBASE_PROJECT_ID
+    value: nic-chatbot
+  - variable: FIREBASE_CLIENT_EMAIL
+    secret: FIREBASE_CLIENT_EMAIL
+  - variable: FIREBASE_PRIVATE_KEY
+    secret: FIREBASE_PRIVATE_KEY

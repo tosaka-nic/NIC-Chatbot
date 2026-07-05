@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
-import db, { User } from "@/lib/db";
+import { db, User } from "@/lib/firestore";
 import { checkIsAdmin } from "@/lib/auth";
 
 export async function GET() {
   if (!(await checkIsAdmin())) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
-  const users = db.prepare("SELECT id, name, email, role, created_at FROM users ORDER BY created_at ASC").all();
+  const snapshot = await db.collection("users").orderBy("created_at").get();
+  const users = snapshot.docs.map(d => {
+    const u = d.data() as User;
+    return { id: u.id, name: u.name, email: u.email, role: u.role, created_at: u.created_at };
+  });
   return NextResponse.json(users);
 }
 
@@ -22,19 +26,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "名前・メール・パスワードは必須です" }, { status: 400 });
   }
 
-  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email.toLowerCase());
-  if (existing) {
+  const existing = await db.collection("users").where("email", "==", email.toLowerCase()).get();
+  if (!existing.empty) {
     return NextResponse.json({ error: "このメールアドレスは既に登録されています" }, { status: 409 });
   }
 
   const id = randomUUID();
   const hash = bcrypt.hashSync(password, 10);
   const today = new Date().toISOString().split("T")[0];
-  db.prepare("INSERT INTO users (id, name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(id, name, email.toLowerCase(), hash, role === "admin" ? "admin" : "user", today);
+  const user: User = { id, name, email: email.toLowerCase(), password_hash: hash, role: role === "admin" ? "admin" : "user", created_at: today };
 
-  const user = db.prepare("SELECT id, name, email, role, created_at FROM users WHERE id = ?").get(id);
-  return NextResponse.json(user, { status: 201 });
+  await db.collection("users").doc(id).set(user);
+  return NextResponse.json({ id, name, email: user.email, role: user.role, created_at: today }, { status: 201 });
 }
 
 export async function DELETE(req: NextRequest) {
@@ -43,17 +46,17 @@ export async function DELETE(req: NextRequest) {
   }
   const { id } = await req.json() as { id: string };
 
-  const target = db.prepare("SELECT * FROM users WHERE id = ?").get(id) as User | undefined;
-  if (!target) return NextResponse.json({ error: "ユーザーが見つかりません" }, { status: 404 });
+  const doc = await db.collection("users").doc(id).get();
+  if (!doc.exists) return NextResponse.json({ error: "ユーザーが見つかりません" }, { status: 404 });
 
-  // 管理者が1人だけの場合は削除不可
+  const target = doc.data() as User;
   if (target.role === "admin") {
-    const adminCount = (db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin'").get() as { c: number }).c;
-    if (adminCount <= 1) {
+    const adminSnap = await db.collection("users").where("role", "==", "admin").get();
+    if (adminSnap.size <= 1) {
       return NextResponse.json({ error: "最後の管理者は削除できません" }, { status: 400 });
     }
   }
 
-  db.prepare("DELETE FROM users WHERE id = ?").run(id);
+  await db.collection("users").doc(id).delete();
   return NextResponse.json({ ok: true });
 }

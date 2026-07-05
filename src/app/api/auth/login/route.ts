@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import db, { User } from "@/lib/db";
+import { db, User } from "@/lib/firestore";
 import { signToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
@@ -10,8 +10,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "メールアドレスとパスワードを入力してください" }, { status: 400 });
   }
 
-  const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email.toLowerCase()) as User | undefined;
-  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+  const snapshot = await db.collection("users").where("email", "==", email.toLowerCase()).get();
+  if (snapshot.empty) {
+    return NextResponse.json({ error: "メールアドレスまたはパスワードが違います" }, { status: 401 });
+  }
+
+  const user = snapshot.docs[0].data() as User;
+  if (!bcrypt.compareSync(password, user.password_hash)) {
     return NextResponse.json({ error: "メールアドレスまたはパスワードが違います" }, { status: 401 });
   }
 
