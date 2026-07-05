@@ -5,9 +5,7 @@ export interface Message {
 }
 
 const sourceBadge: Record<string, { label: string; cls: string }> = {
-  kb:   { label: "ナレッジより", cls: "bg-blue-100 text-blue-700" },
-  n8n:  { label: "n8n AI",      cls: "bg-purple-100 text-purple-700" },
-  none: { label: "未登録",       cls: "bg-yellow-100 text-yellow-700" },
+  kb: { label: "ナレッジより", cls: "bg-blue-100 text-blue-700" },
 };
 
 export default function MessageBubble({ msg }: { msg: Message }) {
