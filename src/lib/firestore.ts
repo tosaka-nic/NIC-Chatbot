@@ -1,5 +1,6 @@
 import { initializeApp, getApps, cert, applicationDefault } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { writeFileSync, existsSync } from "fs";
 
 if (!getApps().length) {
   if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
@@ -11,7 +12,14 @@ if (!getApps().length) {
       }),
     });
   } else {
-    // Firebase App Hosting / ADC環境では自動的に認証される
+    // Vercel / その他: GOOGLE_CREDENTIALS_JSON 環境変数からADC認証情報を書き出す
+    if (process.env.GOOGLE_CREDENTIALS_JSON && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      const credPath = "/tmp/gcloud-credentials.json";
+      if (!existsSync(credPath)) {
+        writeFileSync(credPath, process.env.GOOGLE_CREDENTIALS_JSON);
+      }
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = credPath;
+    }
     initializeApp({
       credential: applicationDefault(),
       projectId: process.env.FIREBASE_PROJECT_ID ?? "nic-chatbot",
