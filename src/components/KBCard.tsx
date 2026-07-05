@@ -2,7 +2,7 @@
 import { useState } from "react";
 import CategoryBadge from "./CategoryBadge";
 import ConfirmModal from "./ConfirmModal";
-import { KBItem } from "@/lib/db";
+import { KBItem } from "@/lib/firestore";
 
 const CATEGORIES = [
   "PC・ハードウェア",
