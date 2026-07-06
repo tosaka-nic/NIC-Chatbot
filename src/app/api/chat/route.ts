@@ -4,12 +4,14 @@ import { getSession } from "@/lib/auth";
 import { randomUUID } from "crypto";
 
 async function saveMessages(userId: string, userText: string, botText: string, source: string) {
-  const now = new Date().toISOString();
-  const col = db.collection("chatHistory").doc(userId).collection("messages");
-  await Promise.all([
-    col.doc(randomUUID()).set({ role: "user", text: userText, timestamp: now }),
-    col.doc(randomUUID()).set({ role: "bot", text: botText, source, timestamp: now }),
-  ]);
+  try {
+    const now = new Date().toISOString();
+    const col = db.collection("chatHistory").doc(userId).collection("messages");
+    await Promise.all([
+      col.doc(randomUUID()).set({ role: "user", text: userText, timestamp: now }),
+      col.doc(randomUUID()).set({ role: "bot", text: botText, source, timestamp: now }),
+    ]);
+  } catch { /* 保存失敗しても回答は返す */ }
 }
 
 export async function POST(req: NextRequest) {
